@@ -81,6 +81,7 @@ class Templater implements TemplaterInterface
 			'\\colorbox'  => 'xcolor',
 			'\\pagecolor' => 'xcolor',
 			'\\ce'        => 'mhchem',
+			'\\chemfig'   => 'chemfig',
 			'\\vv'        => 'esvect',
 			'\\mathscr'   => 'mathrsfs',
 		];

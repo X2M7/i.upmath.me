@@ -1,106 +1,169 @@
 <?php
-/**
- * @copyright 2020 Roman Parpalak
- * @license   http://www.opensource.org/licenses/mit-license.php MIT
- * @package   Upmath Latex Renderer
- * @link      https://i.upmath.me
- */
-
 namespace S2\Tex\Renderer;
 
 class SvgHelper
 {
-	private const POINTS_IN_PIXEL = 0.75;
-	private const TOP_SHIFT_RATIO = 0.5;
+    private const POINTS_IN_PIXEL = 0.75;
+    private const TOP_SHIFT_RATIO = 0.5;
 
-	public static function processSvgContent(string $svg, bool $useBaseline): string
-	{
-		// $svg = '...<!--start 19.8752 31.3399 -->...';
+    private static function normalizeHexColor(?string $c): ?string
+    {
+        if ($c === null) return null;
+        $c = strtolower(trim($c));
+        $c = ltrim($c, '#');
 
-		//                               x          y
-		$startPattern = '#<!--start (-?[\d.]+) (-?[\d.]+) -->#';
-		if (!preg_match($startPattern, $svg, $matchBaseline)) {
-			// SVG has no info about baseline position.
-			return $svg;
-		}
+        if (preg_match('/^[0-9a-f]{3}$/', $c)) {
+            return '#' . $c[0].$c[0] . $c[1].$c[1] . $c[2].$c[2];
+        }
+        if (preg_match('/^[0-9a-f]{6}$/', $c)) {
+            return '#' . $c;
+        }
+        return null;
+    }
 
-		//                                    x            y            w            h
-		$viewBoxPattern = '#viewBox=["\'](-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)["\']#';
-		if (!preg_match($viewBoxPattern, $svg, $matchViewBox)) {
-			// SVG has no info about image size.
-			return $svg;
-		}
+    /**
+     * Only apply recolor when ?c=xxxxxx (or ?color=xxxxxx) exists.
+     * - Root fill="currentColor"
+     * - Root style="color:#xxxxxx"
+     * - Replace explicit pure-black representations to currentColor
+     * - Do NOT set root stroke (avoid bold glyphs)
+     */
+    private static function applyColorParam(string $svg): string
+    {
+        $color = self::normalizeHexColor($_GET['c'] ?? ($_GET['color'] ?? null));
+        if ($color === null) {
+            return $svg; // default output unchanged
+        }
 
-		/**
-		 * See details for viewport and user coordinates:
-		 * https://www.sarasoueidan.com/blog/svg-coordinate-systems/
-		 *
-		 * Values of the viewBox argument (user* variables) are in user coordinates.
-		 * The unit in user space is TeX point (1/72.27 inch).
-		 */
-		[, $userStartX, $userStartY, $userWidth, $userHeight] = $matchViewBox;
+        // 1) Root svg: fill=currentColor + color=<hex>
+        $svg = preg_replace_callback('/<svg\b([^>]*)>/', static function (array $m) use ($color): string {
+            $attrs = $m[1];
 
-		if ($userWidth < 0.000001 || $userHeight < 0.000001) {
-			// Almost empty image
-			return $svg;
-		}
+            // Ensure default fill follows currentColor
+            if (stripos($attrs, ' fill=') === false) {
+                $attrs .= ' fill="currentColor"';
+            }
 
-		$userBaselineY = $matchBaseline[2];
+            // Update or append style="color:..."
+            if (preg_match('/\sstyle=("|\')([^"\']*)\1/i', $attrs, $sm)) {
+                $quote = $sm[1];
+                $style = $sm[2];
 
-		// Typically $userBaselineY > $userStartY
-		$userFromTopToBaseline    = max(0, $userBaselineY - $userStartY);
-		$userFromBottomToBaseline = $useBaseline
-			? max($userHeight - $userFromTopToBaseline, 0)
-			: $userHeight * 0.5;
+                // remove existing color:...
+                $style = preg_replace('/(^|;)\s*color\s*:\s*[^;]+/i', '$1', $style);
+                $style = trim($style);
+                if ($style !== '' && substr($style, -1) !== ';') $style .= ';';
+                $style .= 'color:' . $color . ';';
 
-		/**
-		 * We need to convert user sizes to the viewport coordinates (svg.width and svg.height).
-		 * 1. Convert from TeX point to usual point (1/72 inch) by multiplier
-		 * 72.27/72 = 1.00375.
-		 * 2. The project is set up to scale everything by 1.25. That's why
-		 * OUTER_SCALE = 1.25 * 1.00375.
-		 * 3. Convert from points (pt) to pixels (px) by multiplier 4/3.
-		 */
-		$multiplier = OUTER_SCALE / self::POINTS_IN_PIXEL;
+                $attrs = preg_replace('/\sstyle=("|\')([^"\']*)\1/i', ' style=' . $quote . $style . $quote, $attrs, 1);
+            } else {
+                $attrs .= ' style="color:' . $color . ';"';
+            }
 
-		$viewportFromBottomToBaseline = $multiplier * $userFromBottomToBaseline;
-		$viewportHeight               = $multiplier * $userHeight;
-		$viewportWidth                = $multiplier * $userWidth;
+            return '<svg' . $attrs . '>';
+        }, $svg, 1);
 
-		/**
-		 * 4. Expand the viewport to the int pixel grid to avoid fractions.
-		 * Otherwise there are some bugs in browsers leading wrong image scale or even cut-off.
-		 */
-		$extendedViewportHeight               = ceil($viewportHeight);
-		$extendedViewportWidth                = ceil($viewportWidth);
-		$extendedViewportFromBottomToBaseline = $viewportFromBottomToBaseline + (1 - self::TOP_SHIFT_RATIO) * ($extendedViewportHeight - $viewportHeight);
+        // 2) Replace pure black in attributes -> currentColor
+        // Support BOTH single and double quotes.
+        $svg = preg_replace(
+            '/\b(fill|stroke|stop-color)\s*=\s*(["\'])(#000000|#000|black)\2/i',
+            '$1=$2currentColor$2',
+            $svg
+        );
 
-		/**
-		 * 5. Extend the viewBox in the same proportion as the viewport to avoid the image deformation.
-		 */
-		$extendedUserHeight = $userHeight * $extendedViewportHeight / $viewportHeight;
-		$extendedUserWidth  = $userWidth * $extendedViewportWidth / $viewportWidth;
+        // rgb(0,0,0) or rgb(0%,0%,0%) or rgb(0.0%,0.0%,0.0%)
+        $svg = preg_replace(
+            '/\b(fill|stroke|stop-color)\s*=\s*(["\'])rgb\(\s*0(?:\.0+)?%?\s*,\s*0(?:\.0+)?%?\s*,\s*0(?:\.0+)?%?\s*\)\2/i',
+            '$1=$2currentColor$2',
+            $svg
+        );
+        // rgb(0 0 0) space-separated variant
+        $svg = preg_replace(
+            '/\b(fill|stroke|stop-color)\s*=\s*(["\'])rgb\(\s*0(?:\.0+)?%?\s+0(?:\.0+)?%?\s+0(?:\.0+)?%?\s*\)\2/i',
+            '$1=$2currentColor$2',
+            $svg
+        );
+        // rgba(0,0,0,1)
+        $svg = preg_replace(
+            '/\b(fill|stroke|stop-color)\s*=\s*(["\'])rgba\(\s*0(?:\.0+)?\s*,\s*0(?:\.0+)?\s*,\s*0(?:\.0+)?\s*,\s*1(?:\.0+)?\s*\)\2/i',
+            '$1=$2currentColor$2',
+            $svg
+        );
 
-		$svg = preg_replace('#<svg.*?>#', sprintf(
-			'<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="%s" height="%s" viewBox="%s %s %s %s">',
-			round($extendedViewportWidth, 6),
-			round($extendedViewportHeight, 6),
-			$userStartX,
-			round($userStartY - self::TOP_SHIFT_RATIO * ($extendedUserHeight - $userHeight), 6),
-			round($extendedUserWidth, 6),
-			round($extendedUserHeight, 6)
-		), $svg);
+        // 3) Replace pure black in inline style -> currentColor
+        $svg = preg_replace('/\b(fill|stroke|stop-color)\s*:\s*#000000\b/i', '$1:currentColor', $svg);
+        $svg = preg_replace('/\b(fill|stroke|stop-color)\s*:\s*#000\b/i', '$1:currentColor', $svg);
+        $svg = preg_replace('/\b(fill|stroke|stop-color)\s*:\s*black\b/i', '$1:currentColor', $svg);
 
-		// Embed script providing size info to the parent.
-		$script = sprintf(
-			'<script type="text/ecmascript">if(window.parent.postMessage)window.parent.postMessage("%s|%s|%s|"+window.location,"*");</script>',
-			round($extendedViewportFromBottomToBaseline * self::POINTS_IN_PIXEL, 5),
-			round($extendedViewportWidth * self::POINTS_IN_PIXEL, 5), // back to pt due to backward compatibility reasons for old version of latex.js
-			round($extendedViewportHeight * self::POINTS_IN_PIXEL, 5)
-		);
+        $svg = preg_replace('/\b(fill|stroke|stop-color)\s*:\s*rgb\(\s*0(?:\.0+)?%?\s*,\s*0(?:\.0+)?%?\s*,\s*0(?:\.0+)?%?\s*\)\b/i', '$1:currentColor', $svg);
+        $svg = preg_replace('/\b(fill|stroke|stop-color)\s*:\s*rgb\(\s*0(?:\.0+)?%?\s+0(?:\.0+)?%?\s+0(?:\.0+)?%?\s*\)\b/i', '$1:currentColor', $svg);
+        $svg = preg_replace('/\b(fill|stroke|stop-color)\s*:\s*rgba\(\s*0(?:\.0+)?\s*,\s*0(?:\.0+)?\s*,\s*0(?:\.0+)?\s*,\s*1(?:\.0+)?\s*\)\b/i', '$1:currentColor', $svg);
 
-		$svg = str_replace('</svg>', $script . "\n" . '</svg>', $svg);
+        return $svg;
+    }
 
-		return $svg;
-	}
+    public static function processSvgContent(string $svg, bool $useBaseline): string
+    {
+        $startPattern = '#<!--start (-?[\d.]+) (-?[\d.]+) -->#';
+        if (!preg_match($startPattern, $svg, $matchBaseline)) {
+            return self::applyColorParam($svg);
+        }
+
+        $viewBoxPattern = '#viewBox=["\'](-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)["\']#';
+        if (!preg_match($viewBoxPattern, $svg, $matchViewBox)) {
+            return self::applyColorParam($svg);
+        }
+
+        [, $userStartX, $userStartY, $userWidth, $userHeight] = $matchViewBox;
+        if ($userWidth < 0.000001 || $userHeight < 0.000001) {
+            return self::applyColorParam($svg);
+        }
+
+        $userBaselineY = $matchBaseline[2];
+        $userFromTopToBaseline = max(0, $userBaselineY - $userStartY);
+        $userFromBottomToBaseline = $useBaseline
+            ? max($userHeight - $userFromTopToBaseline, 0)
+            : $userHeight * 0.5;
+
+        $multiplier = OUTER_SCALE / self::POINTS_IN_PIXEL;
+
+        $viewportFromBottomToBaseline = $multiplier * $userFromBottomToBaseline;
+        $viewportHeight               = $multiplier * $userHeight;
+        $viewportWidth                = $multiplier * $userWidth;
+
+        $extendedViewportHeight = ceil($viewportHeight);
+        $extendedViewportWidth  = ceil($viewportWidth);
+        $extendedViewportFromBottomToBaseline =
+            $viewportFromBottomToBaseline
+            + (1 - self::TOP_SHIFT_RATIO) * ($extendedViewportHeight - $viewportHeight);
+
+        $extendedUserHeight = $userHeight * $extendedViewportHeight / $viewportHeight;
+        $extendedUserWidth  = $userWidth * $extendedViewportWidth / $viewportWidth;
+
+        $svg = preg_replace(
+            '#<svg\b[^>]*>#',
+            sprintf(
+                '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="%s" height="%s" viewBox="%s %s %s %s">',
+                round($extendedViewportWidth, 6),
+                round($extendedViewportHeight, 6),
+                $userStartX,
+                round($userStartY - self::TOP_SHIFT_RATIO * ($extendedUserHeight - $userHeight), 6),
+                round($extendedUserWidth, 6),
+                round($extendedUserHeight, 6)
+            ),
+            $svg,
+            1
+        );
+
+        $script = sprintf(
+            '<script type="text/ecmascript">if(window.parent.postMessage)window.parent.postMessage("%s|%s|%s|"+window.location,"*");</script>',
+            round($extendedViewportFromBottomToBaseline * self::POINTS_IN_PIXEL, 5),
+            round($extendedViewportWidth * self::POINTS_IN_PIXEL, 5),
+            round($extendedViewportHeight * self::POINTS_IN_PIXEL, 5)
+        );
+
+        $svg = str_replace('</svg>', $script . "\n" . '</svg>', $svg);
+
+        return self::applyColorParam($svg);
+    }
 }

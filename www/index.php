@@ -12,7 +12,7 @@ if (!defined('FINGERPRINT')) {
 }
 
 // 建议：服务地址指向你自己的域名（用于样例图片 URL 和 latex.js）
-$service_url = '//xumin.net/';
+$service_url = '//' . ($_SERVER['HTTP_HOST'] ?? 'xumin.net') . '/';
 $script_url  = $service_url . 'latex.js';
 
 // 语言：默认中文，支持 ?lang=zh / ?lang=en，并用 cookie 记住

@@ -16,7 +16,11 @@
 \documentclass[11pt<?php if ($hasDvisvgmOption) { ?>,dvisvgm<?php } ?>]{article}
 \usepackage[paperwidth=180in,paperheight=180in]{geometry}
 \batchmode
+
+% 注意我们添加了这两行
 \usepackage[utf8]{inputenc}
+\usepackage{CJKutf8}
+
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{stmaryrd}
@@ -91,10 +95,12 @@ echo $extraPackages->getCode();
 \setlength{\belowdisplayskip}{0pt}
 
 \begin{document}
+\begin{CJK}{UTF8}{gbsn} % 注意我们添加了这一行
 <?php
 foreach (['newwrite', 'openout'] as $disabledCommand) {
-	echo '\\renewcommand{\\' . $disabledCommand . '}{\\errmessage{Command \\noexpand\\' . $disabledCommand . ' is disabled}}', "\n";
+        echo '\\renewcommand{\\' . $disabledCommand . '}{\\errmessage{Command \\noexpand\\' . $disabledCommand . ' is disabled}}', "\n";
 }
 ?>
 <?php echo $documentContent; ?>
+\end{CJK}% 注意我们添加了这一行
 \end{document}

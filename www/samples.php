@@ -123,3 +123,6 @@ ob_start();
 <?php
 
 $samples_embedding['en'][] = ob_get_clean();
+
+// zh: temporarily reuse en embedding samples to avoid undefined index
+$samples_embedding['zh'] = $samples_embedding['en'] ?? [];

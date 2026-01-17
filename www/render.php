@@ -1,13 +1,12 @@
 <?php
 /**
- * Entry point for rendering.
- *
- * @copyright 2014-2020 Roman Parpalak
- * @license   http://www.opensource.org/licenses/mit-license.php MIT
- * @package   Upmath Latex Renderer
- * @link      https://i.upmath.me
- */
-
+* Entry point for rendering.
+*
+* @copyright 2014-2020 Roman Parpalak
+* @license   http://www.opensource.org/licenses/mit-license.php MIT
+* @package   Upmath Latex Renderer
+* @link      https://i.upmath.me
+*/
 use hollodotme\FastCGI\Client;
 use hollodotme\FastCGI\Requests\PostRequest;
 use hollodotme\FastCGI\SocketConnections\UnixDomainSocket;
@@ -35,60 +34,64 @@ define('SVG2PNG_COMMAND', 'rsvg-convert %1$s -d 96 -p 96 -b white'); // stdout
 
 function error400($error = 'Invalid formula')
 {
-	header($_SERVER['SERVER_PROTOCOL'] . ' 400 Bad Request');
-	include '400.php';
+    header($_SERVER['SERVER_PROTOCOL'] . ' 400 Bad Request');
+    include '400.php';
 }
-
 
 //ignore_user_abort();
 ini_set('max_execution_time', 10);
 header('X-Powered-By: Upmath Latex Renderer');
 
 $templater = new Templater(TPL_DIR);
-
 $pngConverter = new PngConverter(SVG2PNG_COMMAND);
 $renderer     = new Renderer($templater, TMP_DIR, TEX_PATH, LATEX_COMMAND, DVISVG_COMMAND);
 $renderer
-	->setPngConverter($pngConverter)
-	->setIsDebug($isDebug);
+    ->setPngConverter($pngConverter)
+    ->setIsDebug($isDebug);
 
 if (defined('LOG_DIR')) {
-	$renderer->setLogger(new Logger(LOG_DIR));
+    $renderer->setLogger(new Logger(LOG_DIR));
 }
 
 $cacheProvider = new CacheProvider(CACHE_SUCCESS_DIR, CACHE_FAIL_DIR);
 $processor     = new Processor($renderer, $cacheProvider, $pngConverter);
 
 try {
-	$request = Request::createFromUri(
-		parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH)
-	);
+    // IMPORTANT: use full REQUEST_URI so Request can see query (?c=...)
+    $request = Request::createFromUri($_SERVER['REQUEST_URI']);
 } catch (Exception $e) {
-	error400($isDebug ? $e->getMessage() : 'Invalid formula');
-	die;
+    error400($isDebug ? $e->getMessage() : 'Invalid formula');
+    die;
 }
 
 $response = $processor->process($request);
 
 if (!$response->hasError()) {
-	$response->echoContent();
+    $response->echoContent();
 } else {
-	error400($isDebug ? $response->getError() : 'Invalid formula');
+    error400($isDebug ? $response->getError() : 'Invalid formula');
 }
 
 if (!$isDebug && !($response instanceof CachedResponse)) {
-	// Disconnecting from web-server
-	flush();
-	fastcgi_finish_request();
+    // Disconnecting from web-server
+    flush();
+    fastcgi_finish_request();
 
-	$postProc     = new PostProcessor($cacheProvider);
-	$asyncRequest = $postProc->cacheResponseAndGetAsyncRequest($response, $_SERVER['HTTP_REFERER'] ?? 'no referer');
-	if ($asyncRequest !== null) {
-		$connection = new UnixDomainSocket(FASTCGI_SOCKET, 1000, 1000);
-		$client     = new Client();
-		$content    = http_build_query(['formula' => $asyncRequest->getFormula(), 'extension' => $asyncRequest->getExtension()]);
+    $postProc     = new PostProcessor($cacheProvider);
+    $asyncRequest = $postProc->cacheResponseAndGetAsyncRequest($response, $_SERVER['HTTP_REFERER'] ?? 'no referer');
 
-		$request = new PostRequest(realpath('../cache_processor.php'), $content);
-		$client->sendAsyncRequest($connection, $request);
-	}
+    if ($asyncRequest !== null) {
+        $connection = new UnixDomainSocket(FASTCGI_SOCKET, 1000, 1000);
+        $client     = new Client();
+
+        // IMPORTANT: pass color param to async processor too
+        $content = http_build_query([
+            'formula'    => $asyncRequest->getFormula(),
+            'extension'  => $asyncRequest->getExtension(),
+            'c'          => $_GET['c'] ?? ($_GET['color'] ?? ''),
+        ]);
+
+        $request = new PostRequest(realpath('../cache_processor.php'), $content);
+        $client->sendAsyncRequest($connection, $request);
+    }
 }

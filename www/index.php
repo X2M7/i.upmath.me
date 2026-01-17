@@ -11,15 +11,25 @@ if (!defined('FINGERPRINT')) {
 	define('FINGERPRINT', '');
 }
 
-$service_url = '//i.upmath.me/';
-$script_url = $service_url.'latex.js';
+// 建议：服务地址指向你自己的域名（用于样例图片 URL 和 latex.js）
+$service_url = '//xumin.net/';
+$script_url  = $service_url . 'latex.js';
 
-$lang = ($_SERVER['HTTP_HOST'] ?? '') === 'tex.s2cms.ru' ? 'ru' : 'en';
+// 语言：默认中文，支持 ?lang=zh / ?lang=en，并用 cookie 记住
+$supportedLang = ['zh', 'en'];
+
+$lang = $_GET['lang'] ?? ($_COOKIE['lang'] ?? 'zh');
+$lang = in_array($lang, $supportedLang, true) ? $lang : 'zh';
+
+// 记住选择（不需要记忆就删掉这一行）
+setcookie('lang', $lang, time() + 3600 * 24 * 365, '/', '', false, true);
+
 $i18n = include 'lang.' . $lang . '.php';
 
+// 同域名切换，不跳转到别的站
 $langLinks = [
-	'ru' => '//tex.s2cms.ru/',
-	'en' => '//i.upmath.me/',
+    'zh' => '/?lang=zh',
+    'en' => '/?lang=en',
 ];
 
 function __ ($key) {
@@ -60,7 +70,7 @@ else {
 foreach ($langLinks as $linkLang => $linkUrl) {
 	if ($linkLang !== $lang) {
 ?>
-				<a class="lang-link" href="<?php echo $linkUrl; ?>"><?php echo $linkLang; ?></a>
+				<a class="lang-link" href="<?php echo $linkUrl; ?>"><?php echo $linkLang === 'zh' ? '中文' : 'EN'; ?></a>
 <?php
 	}
 }

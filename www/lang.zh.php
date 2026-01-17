@@ -116,7 +116,7 @@ LaTeX 是一种排版系统，常用于生成复杂文档，尤其在数学、�
 ',
 
     'copyright section'     => <<<TEXT
-&copy; 2014&ndash;2024 <a href="https://parpalak.com/">Roman Parpalak</a>.
+&copy; 2014&ndash;2026 <a href="https://parpalak.com/">Roman Parpalak</a>.
 <script>var mailto="roman%"+"40parpalak.com";document.write('Drop&nbsp;me&nbsp;a&nbsp;line: <a href="mailto:'+unescape(mailto)+'">' + unescape(mailto) + '</a>.');</script>
 TEXT
 ,

@@ -4,6 +4,11 @@ EXPOSE 80
 
 WORKDIR /var/www/i.upmath.me
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    fonts-noto-cjk \
+    latex-cjk-all \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN apt-get update && apt-get -y --no-install-recommends install \
     nginx-extras lua-zlib \
     zip unzip \

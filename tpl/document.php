@@ -27,6 +27,7 @@
 \newcommand{\R}{\mathbb{R}}
 \newcommand{\lt}{<}
 \newcommand{\gt}{>}
+\usepackage{esint}
 
 % Conditional definitions
 \providecommand{\tg}{\operatorname{tg}}

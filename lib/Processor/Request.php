@@ -15,8 +15,9 @@ class Request
 
 	protected string $extension;
 	protected string $formula;
+	protected string $variant;
 
-	public function __construct(string $formula, string $extension)
+	public function __construct(string $formula, string $extension, string $variant = '')
 	{
 		if (!self::extensionIsValid($extension)) {
 			throw new \InvalidArgumentException('Incorrect output format has been requested. Expected SVG or PNG.');
@@ -24,6 +25,7 @@ class Request
 
 		$this->formula   = $formula;
 		$this->extension = $extension;
+		$this->variant   = $variant;
 	}
 
 	/**
@@ -31,7 +33,13 @@ class Request
 	 */
 	public static function createFromUri(string $uri): self
 	{
-		$parts = explode('/', $uri, 3);
+		$path  = $uri;
+		$query = '';
+		if (strpos($uri, '?') !== false) {
+			[$path, $query] = explode('?', $uri, 2);
+		}
+
+		$parts = explode('/', $path, 3);		
 		if (\count($parts) < 3) {
 			throw new \RuntimeException('Incorrect input format.');
 		}
@@ -45,7 +53,7 @@ class Request
 		}
 		$formula = trim($formula);
 
-		return new static($formula, $extension);
+		return new static($formula, $extension, self::parseVariant($query));
 	}
 
 	public function getExtension(): string
@@ -56,6 +64,11 @@ class Request
 	public function getFormula(): string
 	{
 		return $this->formula;
+	}
+
+	public function getVariant(): string
+	{
+		return $this->variant;
 	}
 
 	public function isPng(): bool
@@ -84,6 +97,32 @@ class Request
 		return $str === self::SVG || $str === self::PNG;
 	}
 
+	private static function parseVariant(string $query): string
+	{
+		if ($query === '') {
+			return '';
+		}
+
+		parse_str($query, $params);
+		$color = $params['c'] ?? ($params['color'] ?? null);
+		return self::normalizeHexColor($color) ?? '';
+	}
+
+	private static function normalizeHexColor(?string $c): ?string
+	{
+		if ($c === null) return null;
+		$c = strtolower(trim($c));
+		$c = ltrim($c, '#');
+
+		if (preg_match('/^[0-9a-f]{3}$/', $c)) {
+			return '#' . $c[0].$c[0] . $c[1].$c[1] . $c[2].$c[2];
+		}
+		if (preg_match('/^[0-9a-f]{6}$/', $c)) {
+			return '#' . $c;
+		}
+		return null;
+	}
+	
 	/**
 	 * @throws \RuntimeException
 	 */

@@ -37,14 +37,6 @@ docker stop upmath
 docker rm upmath
 ```
 
-> Notes  
-> - If the package is **Public**, you don’t need to login.  
-> - If it is **Private**, login first:
->
-> ```bash
-> docker login ghcr.io
-> ```
-
 ### Build locally (optional)
 
 ```bash

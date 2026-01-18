@@ -17,7 +17,7 @@ The Docker image is published to GitHub Container Registry.
 Run:
 
 ```bash
-docker run --rm -t -p 8080:80 ghcr.io/x2m7/i.upmath.me:v1.0.0
+docker run --rm -t -p 8080:80 ghcr.io/x2m7/i.upmath.me:latest
 ```
 
 Then open:
@@ -27,7 +27,7 @@ Then open:
 Optional: run in background
 
 ```bash
-docker run -d --name upmath -p 8080:80 ghcr.io/x2m7/i.upmath.me:v1.0.0
+docker run -d --name upmath -p 8080:80 ghcr.io/x2m7/i.upmath.me:latest
 ```
 
 Stop and remove:

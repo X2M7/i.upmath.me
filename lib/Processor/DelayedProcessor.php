@@ -89,6 +89,10 @@ class DelayedProcessor
 
 			return;
 		}
+		if ($request->isJpg()) {
+			// No delayed optimization for JPG yet.
+			return;
+		}
 
 		throw new \InvalidArgumentException(\sprintf(
 			'Unknown type "%s" for delayed processing. [%s]',

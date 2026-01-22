@@ -43,6 +43,11 @@ class Response
 		return $this->request->isPng();
 	}
 
+	public function isJpg(): bool
+	{
+		return $this->request->isJpg();
+	}
+
 	public function getError(): string
 	{
 		return $this->errorMessage;
@@ -63,6 +68,8 @@ class Response
 			header('Content-Type: image/svg+xml');
 		} elseif ($this->isPng()) {
 			header('Content-Type: image/png');
+		} elseif ($this->isJpg()) {
+			header('Content-Type: image/jpeg');
 		}
 
 		header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $this->modifiedAt) . ' GMT');

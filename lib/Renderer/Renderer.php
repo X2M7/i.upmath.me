@@ -21,6 +21,7 @@ class Renderer implements RendererInterface
 {
 	private TemplaterInterface $templater;
 	private ?PngConverter $pngConverter;
+	private ?JpgConverter $jpgConverter;
 	private ?LoggerInterface $logger;
 	private string $tmpDir;
 	private bool $isDebug = false;
@@ -62,6 +63,13 @@ class Renderer implements RendererInterface
 	public function setPngConverter(PngConverter $pngConverter): self
 	{
 		$this->pngConverter = $pngConverter;
+
+		return $this;
+	}
+
+	public function setJpgConverter(JpgConverter $jpgConverter): self
+	{
+		$this->jpgConverter = $jpgConverter;
 
 		return $this;
 	}
@@ -178,17 +186,31 @@ class Renderer implements RendererInterface
 				);
 				$pngContent = file_get_contents($tmpName . '.png');
 			}
+		} elseif ($type === 'jpg' || $type === 'jpeg') {
+			if ($this->jpgConverter) {
+				// SVG -> JPG
+				$jpgContent = $this->jpgConverter->convert($tmpName . '.svg');
+			} else {
+				$this->cleanupTempFiles($tmpName);
+				throw new \RuntimeException('JPG converter is not configured.');
+			}
 		}
 
 		// Cleaning up
 		$this->cleanupTempFiles($tmpName);
 
-		return $type === 'png' ? $pngContent : $svgContent;
+		if ($type === 'png') {
+			return $pngContent;
+		}
+		if ($type === 'jpg' || $type === 'jpeg') {
+			return $jpgContent;
+		}
+		return $svgContent;
 	}
 
 	private function cleanupTempFiles($tmpName): void
 	{
-		foreach (['', '.log', '.aux', '.dvi', '.svg', '.png'] as $ext) {
+		foreach (['', '.log', '.aux', '.dvi', '.svg', '.png', '.jpg', '.jpeg'] as $ext) {
 			@unlink($tmpName . $ext);
 		}
 	}

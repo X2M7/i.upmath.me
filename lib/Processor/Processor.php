@@ -9,6 +9,7 @@
 namespace S2\Tex\Processor;
 
 use S2\Tex\Cache\CacheProvider;
+use S2\Tex\Renderer\JpgConverter;
 use S2\Tex\Renderer\PngConverter;
 use S2\Tex\Renderer\RendererInterface;
 
@@ -21,15 +22,18 @@ class Processor
 	private RendererInterface $renderer;
 	private CacheProvider $cacheProvider;
 	private PngConverter $pngConverter;
+	private JpgConverter $jpgConverter;
 
 	public function __construct(
 		RendererInterface $renderer,
 		CacheProvider $cacheProvider,
-		PngConverter $pngConverter
+		PngConverter $pngConverter,
+		JpgConverter $jpgConverter
 	) {
 		$this->renderer      = $renderer;
 		$this->cacheProvider = $cacheProvider;
 		$this->pngConverter  = $pngConverter;
+		$this->jpgConverter  = $jpgConverter;
 	}
 
 	public function process(Request $request): Response
@@ -51,6 +55,17 @@ class Processor
 			if ($svgCacheState->cacheExists()) {
 				$modifiedAt = time();
 				$content    = $this->pngConverter->convert($svgCacheState->getCacheName());
+
+				return new Response($request, $content, $modifiedAt);
+			}
+		}
+		if ($request->isJpg()) {
+			// Not cached JPG. Maybe there is an SVG cache.
+			$svgRequest    = $request->withExtension(Request::SVG);
+			$svgCacheState = $this->cacheProvider->getCacheState($svgRequest);
+			if ($svgCacheState->cacheExists()) {
+				$modifiedAt = time();
+				$content    = $this->jpgConverter->convert($svgCacheState->getCacheName());
 
 				return new Response($request, $content, $modifiedAt);
 			}

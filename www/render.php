@@ -16,6 +16,7 @@ use S2\Tex\Processor\CachedResponse;
 use S2\Tex\Processor\PostProcessor;
 use S2\Tex\Processor\Processor;
 use S2\Tex\Processor\Request;
+use S2\Tex\Renderer\JpgConverter;
 use S2\Tex\Renderer\PngConverter;
 use S2\Tex\Renderer\Renderer;
 use S2\Tex\Templater;
@@ -31,6 +32,7 @@ define('LATEX_COMMAND', TEX_PATH . 'latex -output-directory=' . TMP_DIR);
 define('DVISVG_COMMAND', TEX_PATH . 'dvisvgm %1$s -o %1$s.svg -n --exact -v0 --relative --zoom=' . OUTER_SCALE);
 // define('DVIPNG_COMMAND', TEX_PATH . 'dvipng -T tight %1$s -o %1$s.png -D ' . (96 * OUTER_SCALE)); // outdated
 define('SVG2PNG_COMMAND', 'rsvg-convert %1$s -d 96 -p 96 -b white'); // stdout
+define('SVG2JPG_COMMAND', 'rsvg-convert %1$s -d 96 -p 96 -b white -f png | convert png:- -quality 92 jpg:-'); // stdout
 
 function error400($error = 'Invalid formula')
 {
@@ -44,9 +46,11 @@ header('X-Powered-By: Upmath Latex Renderer');
 
 $templater = new Templater(TPL_DIR);
 $pngConverter = new PngConverter(SVG2PNG_COMMAND);
+$jpgConverter = new JpgConverter(SVG2JPG_COMMAND);
 $renderer     = new Renderer($templater, TMP_DIR, TEX_PATH, LATEX_COMMAND, DVISVG_COMMAND);
 $renderer
     ->setPngConverter($pngConverter)
+    ->setJpgConverter($jpgConverter)
     ->setIsDebug($isDebug);
 
 if (defined('LOG_DIR')) {
@@ -54,7 +58,7 @@ if (defined('LOG_DIR')) {
 }
 
 $cacheProvider = new CacheProvider(CACHE_SUCCESS_DIR, CACHE_FAIL_DIR);
-$processor     = new Processor($renderer, $cacheProvider, $pngConverter);
+$processor     = new Processor($renderer, $cacheProvider, $pngConverter, $jpgConverter);
 
 try {
     // IMPORTANT: use full REQUEST_URI so Request can see query (?c=...)

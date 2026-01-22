@@ -12,6 +12,8 @@ class Request
 {
 	public const SVG = 'svg';
 	public const PNG = 'png';
+	public const JPG = 'jpg';
+	public const JPEG = 'jpeg';
 
 	protected string $extension;
 	protected string $formula;
@@ -19,8 +21,9 @@ class Request
 
 	public function __construct(string $formula, string $extension, string $variant = '')
 	{
+		$extension = self::normalizeExtension($extension);
 		if (!self::extensionIsValid($extension)) {
-			throw new \InvalidArgumentException('Incorrect output format has been requested. Expected SVG or PNG.');
+			throw new \InvalidArgumentException('Incorrect output format has been requested. Expected SVG, PNG, or JPG.');
 		}
 
 		$this->formula   = $formula;
@@ -39,13 +42,13 @@ class Request
 			[$path, $query] = explode('?', $uri, 2);
 		}
 
-		$parts = explode('/', $path, 3);		
+		$parts = explode('/', $path, 3);
 		if (\count($parts) < 3) {
 			throw new \RuntimeException('Incorrect input format.');
 		}
 
-		$extension = $parts[1];
-		if ($extension === 'svgb' || $extension === 'pngb') {
+		$extension = strtolower($parts[1]);
+		if ($extension === 'svgb' || $extension === 'pngb' || $extension === 'jpgb' || $extension === 'jpegb') {
 			$extension = substr($extension, 0, -1);
 			$formula   = self::decodeCompressedFormula($parts[2]);
 		} else {
@@ -81,6 +84,11 @@ class Request
 		return $this->extension === self::SVG;
 	}
 
+	public function isJpg(): bool
+	{
+		return $this->extension === self::JPG || $this->extension === self::JPEG;
+	}
+
 	public function withExtension(string $extension): self
 	{
 		if (!self::extensionIsValid($extension)) {
@@ -94,7 +102,19 @@ class Request
 
 	private static function extensionIsValid(string $str): bool
 	{
-		return $str === self::SVG || $str === self::PNG;
+		return $str === self::SVG || $str === self::PNG || $str === self::JPG || $str === self::JPEG;
+	}
+
+	private static function normalizeExtension(string $extension): string
+	{
+		$extension = strtolower($extension);
+		return $extension === self::JPEG ? self::JPG : $extension;
+	}
+
+	public static function buildVariantFromParams(array $params): string
+	{
+		$color = $params['c'] ?? ($params['color'] ?? null);
+		return self::normalizeHexColor($color) ?? '';
 	}
 
 	private static function parseVariant(string $query): string
@@ -122,7 +142,7 @@ class Request
 		}
 		return null;
 	}
-	
+
 	/**
 	 * @throws \RuntimeException
 	 */

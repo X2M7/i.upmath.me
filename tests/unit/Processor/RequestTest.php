@@ -30,14 +30,18 @@ class RequestTest extends Unit
 		$requestPng = new Request('3*3', Request::PNG);
 		$this->assertEquals(Request::PNG, $requestPng->getExtension());
 		$this->assertEquals('3*3', $requestPng->getFormula());
+
+		$requestJpg = new Request('4/4', Request::JPG);
+		$this->assertEquals(Request::JPG, $requestJpg->getExtension());
+		$this->assertEquals('4/4', $requestJpg->getFormula());
 	}
 
 	public function testConstructorWithInvalidExtension(): void
 	{
 		$this->expectException(\InvalidArgumentException::class);
-		$this->expectExceptionMessage('Incorrect output format has been requested. Expected SVG or PNG.');
+		$this->expectExceptionMessage('Incorrect output format has been requested. Expected SVG, PNG, or JPG.');
 
-		new Request('1+1', 'jpg');
+		new Request('1+1', 'pdf');
 	}
 
 	/**
@@ -78,6 +82,11 @@ class RequestTest extends Unit
 				Request::PNG,
 				'$%^&'
 			],
+			'JPG with simple formula' => [
+				'/jpg/1%2F2',
+				Request::JPG,
+				'1/2'
+			],
 			'SVG with empty formula' => [
 				'/svg/',
 				Request::SVG,
@@ -104,6 +113,11 @@ class RequestTest extends Unit
 				'/pngb/U1GNUwMA',
 				'png',
 				'$%^&'
+			],
+			'JPGb with simple formula' => [
+				'/jpgb/M9I2AgA',
+				'jpg',
+				'2+2'
 			],
 			'SVGb with empty formula' => [
 				'/svgb/', // empty
@@ -138,10 +152,17 @@ class RequestTest extends Unit
 		$svgRequest = new Request('test', Request::SVG);
 		$this->assertTrue($svgRequest->isSvg());
 		$this->assertFalse($svgRequest->isPng());
+		$this->assertFalse($svgRequest->isJpg());
 
 		$pngRequest = new Request('test', Request::PNG);
 		$this->assertTrue($pngRequest->isPng());
 		$this->assertFalse($pngRequest->isSvg());
+		$this->assertFalse($pngRequest->isJpg());
+
+		$jpgRequest = new Request('test', Request::JPG);
+		$this->assertTrue($jpgRequest->isJpg());
+		$this->assertFalse($jpgRequest->isSvg());
+		$this->assertFalse($jpgRequest->isPng());
 	}
 
 	/**

@@ -32,7 +32,7 @@ define('LATEX_COMMAND', TEX_PATH . 'latex -output-directory=' . TMP_DIR);
 define('DVISVG_COMMAND', TEX_PATH . 'dvisvgm %1$s -o %1$s.svg -n --exact -v0 --relative --zoom=' . OUTER_SCALE);
 // define('DVIPNG_COMMAND', TEX_PATH . 'dvipng -T tight %1$s -o %1$s.png -D ' . (96 * OUTER_SCALE)); // outdated
 define('SVG2PNG_COMMAND', 'rsvg-convert %1$s -d 96 -p 96 -b white'); // stdout
-define('SVG2JPG_COMMAND', 'rsvg-convert %1$s -d 96 -p 96 -b white -f png | convert png:- -quality 98 jpg:-'); // stdout
+define('SVG2JPG_COMMAND', 'rsvg-convert %1$s -d 288 -p 288 -b white -f png | convert png:- -quality 98 jpg:-'); // stdout
 
 function error400($error = 'Invalid formula')
 {

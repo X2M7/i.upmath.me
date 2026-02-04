@@ -2,7 +2,7 @@
 
 Service for generating nice **SVG pictures from LaTeX equations** for web.
 
-- Online demo: https://xumin.net
+- Online demo: https://tex.xumin.net
 - Upstream project: https://github.com/parpalak/i.upmath.me
 - This fork: https://github.com/X2M7/i.upmath.me
 

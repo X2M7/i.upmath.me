@@ -23,6 +23,7 @@
 
 \usepackage{amsmath}
 \usepackage{amssymb}
+\usepackage{graphicx}
 \usepackage{stmaryrd}
 \newcommand{\R}{\mathbb{R}}
 \newcommand{\lt}{<}

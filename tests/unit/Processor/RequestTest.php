@@ -44,6 +44,31 @@ class RequestTest extends Unit
 		new Request('1+1', 'pdf');
 	}
 
+	public function testConstructorRejectsOversizedFormula(): void
+	{
+		$this->expectException(\InvalidArgumentException::class);
+		$this->expectExceptionMessage('Formula is too long.');
+
+		new Request(str_repeat('x', Request::MAX_FORMULA_LENGTH + 1), Request::SVG);
+	}
+
+	public function testCompressedFormulaRejectsInvalidBase64(): void
+	{
+		$this->expectException(\RuntimeException::class);
+		$this->expectExceptionMessage('Failed to decode formula.');
+
+		Request::decodeCompressedFormula('***');
+	}
+
+	public function testCompressedFormulaRejectsOversizedOutput(): void
+	{
+		$compressed = gzdeflate(str_repeat('x', Request::MAX_FORMULA_LENGTH + 1));
+		$encoded = rtrim(strtr(base64_encode($compressed), '+/', '-_'), '=');
+
+		$this->expectException(\RuntimeException::class);
+		Request::decodeCompressedFormula($encoded);
+	}
+
 	/**
 	 * @dataProvider validUriDataProvider
 	 * @throws ExpectationFailedException
@@ -186,5 +211,12 @@ class RequestTest extends Unit
 		$this->expectExceptionMessage('Unsupported extension "pdf".');
 
 		$original->withExtension('pdf');
+	}
+
+	public function testArrayColorParameterIsRejected(): void
+	{
+		$request = Request::createFromUri('/svg/x?c[]=ff0000');
+
+		$this->assertSame('', $request->getVariant());
 	}
 }

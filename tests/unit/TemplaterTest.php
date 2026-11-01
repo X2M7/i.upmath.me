@@ -13,5 +13,6 @@ class TemplaterTest extends Unit
 		$formula   = $templater->run('x^2');
 
 		$this->assertStringContainsString('\\usepackage{graphicx}', $formula->getText());
+		$this->assertStringContainsString("x^2$}\n", $formula->getText());
 	}
 }

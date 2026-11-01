@@ -18,7 +18,7 @@ hangout() {
 
 main() {
   hangout
-  printenv > /etc/environment
+  umask 0027
   exec /usr/bin/supervisord -c /etc/superv.conf
 }
 

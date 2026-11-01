@@ -5,10 +5,123 @@ class SvgHelper
 {
     private const POINTS_IN_PIXEL = 0.75;
     private const TOP_SHIFT_RATIO = 0.5;
+    private const MAX_SVG_LENGTH = 5_000_000;
 
-    private static function normalizeHexColor(?string $c): ?string
+    private static function sanitizeUntrustedSvg(string $svg): string
     {
-        if ($c === null) return null;
+        if (strlen($svg) > self::MAX_SVG_LENGTH) {
+            throw new \RuntimeException('Rendered SVG is too large.');
+        }
+        if (preg_match('/<!DOCTYPE|<!ENTITY/i', $svg) === 1) {
+            throw new \RuntimeException('Rendered SVG contains a forbidden declaration.');
+        }
+
+        $previousUseErrors = libxml_use_internal_errors(true);
+        $document = new \DOMDocument();
+        $loaded = $document->loadXML($svg, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING | LIBXML_COMPACT);
+        libxml_clear_errors();
+        libxml_use_internal_errors($previousUseErrors);
+
+        if (!$loaded || $document->documentElement === null || strtolower($document->documentElement->localName) !== 'svg') {
+            throw new \RuntimeException('Rendered SVG is invalid.');
+        }
+
+        $nodes = [];
+        foreach ($document->getElementsByTagName('*') as $node) {
+            $nodes[] = $node;
+        }
+
+        $changed = false;
+        $blockedElements = ['script', 'foreignobject', 'iframe', 'object', 'embed', 'audio', 'video', 'canvas', 'link', 'meta'];
+
+        foreach ($nodes as $node) {
+            $elementName = strtolower($node->localName);
+            if (in_array($elementName, $blockedElements, true)) {
+                $node->parentNode?->removeChild($node);
+                $changed = true;
+                continue;
+            }
+
+            if ($elementName === 'style' && self::cssMayExecute((string) $node->textContent)) {
+                $node->parentNode?->removeChild($node);
+                $changed = true;
+                continue;
+            }
+
+            $attributes = [];
+            foreach ($node->attributes ?? [] as $attribute) {
+                $attributes[] = $attribute;
+            }
+
+            foreach ($attributes as $attribute) {
+                $attributeName = strtolower($attribute->localName);
+                $value = (string) $attribute->value;
+
+                if (str_starts_with($attributeName, 'on') || $attributeName === 'srcdoc') {
+                    $node->removeAttributeNode($attribute);
+                    $changed = true;
+                    continue;
+                }
+
+                if ($attributeName === 'style' && self::cssMayExecute($value)) {
+                    $node->removeAttributeNode($attribute);
+                    $changed = true;
+                    continue;
+                }
+
+                if (in_array($attributeName, ['href', 'src', 'action', 'formaction', 'data'], true)
+                    && !self::isSafeResourceReference($elementName, $value)) {
+                    $node->removeAttributeNode($attribute);
+                    $changed = true;
+                    continue;
+                }
+
+                $normalizedValue = strtolower(preg_replace('/[\x00-\x20]+/', '', $value) ?? '');
+                if (str_starts_with($normalizedValue, 'javascript:') || str_starts_with($normalizedValue, 'vbscript:')) {
+                    $node->removeAttributeNode($attribute);
+                    $changed = true;
+                }
+            }
+        }
+
+        if (!$changed) {
+            return $svg;
+        }
+
+        $sanitized = $document->saveXML($document->documentElement);
+        if ($sanitized === false) {
+            throw new \RuntimeException('Cannot sanitize rendered SVG.');
+        }
+
+        return $sanitized;
+    }
+
+    private static function cssMayExecute(string $css): bool
+    {
+        $normalized = strtolower(preg_replace('/[\x00-\x20]+/', '', $css) ?? '');
+
+        return str_contains($normalized, '@import')
+            || str_contains($normalized, 'javascript:')
+            || str_contains($normalized, 'vbscript:')
+            || str_contains($normalized, 'expression(')
+            || str_contains($normalized, '-moz-binding')
+            || preg_match('/url\((?!["\']?#)/', $normalized) === 1;
+    }
+
+    private static function isSafeResourceReference(string $elementName, string $value): bool
+    {
+        $normalized = preg_replace('/[\x00-\x20]+/', '', $value) ?? '';
+        if (($elementName === 'use' || $elementName === 'image') && str_starts_with($normalized, '#')) {
+            return true;
+        }
+
+        return $elementName === 'image'
+            && preg_match('#^data:image/(?:png|jpe?g|gif|webp);base64,[a-z0-9+/=]+$#i', $normalized) === 1;
+    }
+
+    private static function normalizeHexColor(mixed $c): ?string
+    {
+        if (!is_string($c)) return null;
         $c = strtolower(trim($c));
         $c = ltrim($c, '#');
 
@@ -104,6 +217,8 @@ class SvgHelper
 
     public static function processSvgContent(string $svg, bool $useBaseline): string
     {
+        $svg = self::sanitizeUntrustedSvg($svg);
+
         $startPattern = '#<!--start (-?[\d.]+) (-?[\d.]+) -->#';
         if (!preg_match($startPattern, $svg, $matchBaseline)) {
             return self::applyColorParam($svg);

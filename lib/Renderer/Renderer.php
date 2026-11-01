@@ -20,29 +20,26 @@ use Symfony\Component\Process\Process;
 class Renderer implements RendererInterface
 {
 	private TemplaterInterface $templater;
-	private ?PngConverter $pngConverter;
-	private ?JpgConverter $jpgConverter;
-	private ?LoggerInterface $logger;
+	private ?PngConverter $pngConverter = null;
+	private ?JpgConverter $jpgConverter = null;
+	private ?LoggerInterface $logger = null;
 	private string $tmpDir;
 	private bool $isDebug = false;
 	private string $texPath;
 	private string $latexCommand;
 	private string $svgCommand;
-	private ?string $pngCommand;
 
 	public function __construct(
 		TemplaterInterface $templater,
 		string             $tmpDir,
 		string             $texPath,
 		string             $latexCommand,
-		string             $svgCommand,
-		?string            $pngCommand = null
+		string             $svgCommand
 	) {
 		$this->templater    = $templater;
 		$this->tmpDir       = $tmpDir;
 		$this->latexCommand = $latexCommand;
 		$this->svgCommand   = $svgCommand;
-		$this->pngCommand   = $pngCommand;
 		$this->texPath      = $texPath;
 	}
 
@@ -81,14 +78,18 @@ class Renderer implements RendererInterface
 	{
 		$this->validateFormula($formula);
 
-		$tmpName = tempnam($this->tmpDir, '');
-
 		$formulaObj = $this->templater->run($formula);
 		$texSource  = $formulaObj->getText();
 		$this->echoDebug(htmlspecialchars($texSource));
 
+		$workDir = $this->createWorkingDirectory();
+		$tmpName = $workDir . '/formula';
+
 		// Latex
-		file_put_contents($tmpName, $texSource);
+		if (file_put_contents($tmpName, $texSource, LOCK_EX) === false) {
+			$this->cleanupWorkingDirectory($workDir);
+			throw new \RuntimeException('Cannot write the temporary Latex source.');
+		}
 
 		/**
 		 * Adding the TeX bin directory (e.g. `/home/tex/tl-2020/bin/x86_64-linux`) to the PATH environment variable.
@@ -96,7 +97,11 @@ class Renderer implements RendererInterface
 		 *
 		 * See https://github.com/symfony/symfony/issues/5030 for 'exec' hack
 		 */
-		$process = Process::fromShellCommandline('PATH="$PATH:' . $this->texPath . '" exec ' . $this->latexCommand . ' ' . $tmpName . ' 2>&1');
+		$process = Process::fromShellCommandline(
+			'exec ' . $this->latexCommand . ' ' . escapeshellarg(basename($tmpName)),
+			$workDir,
+			$this->processEnvironment($workDir)
+		);
 		$process->setTimeout(8);
 
 		try {
@@ -105,7 +110,7 @@ class Renderer implements RendererInterface
 				'shell',
 				Helper::getShortCommandName($this->latexCommand)
 			);
-		} catch (\Exception $e) {
+		} catch (\Throwable $e) {
 			if ($this->logger !== null) {
 				$message = $e instanceof ProcessTimedOutException ? 'Latex has been interrupted by a timeout' : 'Cannot run Latex';
 				$this->logger->error($message, [
@@ -115,7 +120,7 @@ class Renderer implements RendererInterface
 				]);
 			}
 			$this->dumpDebug($texSource);
-			$this->cleanupTempFiles($tmpName);
+			$this->cleanupWorkingDirectory($workDir);
 
 			throw $e;
 		}
@@ -140,17 +145,25 @@ class Renderer implements RendererInterface
 				$this->logger->error('trace (' . $tmpName . '.log)', [file_get_contents($tmpName . '.log')]);
 			}
 
-			$this->cleanupTempFiles($tmpName);
+			$this->cleanupWorkingDirectory($workDir);
 			throw new \RuntimeException('Invalid formula');
 		}
 
 		// DVI -> SVG
-		$cmd       = sprintf($this->svgCommand, $tmpName);
-		$svgOutput = Helper::newRelicProfileDataStore(
-			static fn() => shell_exec($cmd),
-			'shell',
-			Helper::getShortCommandName($cmd)
-		);
+		$cmd        = sprintf($this->svgCommand, escapeshellarg($tmpName));
+		$svgProcess = Process::fromShellCommandline($cmd, $workDir, $this->processEnvironment($workDir));
+		$svgProcess->setTimeout(8);
+		try {
+			Helper::newRelicProfileDataStore(
+				static fn() => $svgProcess->run(),
+				'shell',
+				Helper::getShortCommandName($cmd)
+			);
+		} catch (\Throwable $e) {
+			$this->cleanupWorkingDirectory($workDir);
+			throw $e;
+		}
+		$svgOutput = $svgProcess->getOutput() . $svgProcess->getErrorOutput();
 
 		$this->dumpDebug($cmd);
 		$this->dumpDebug($svgOutput);
@@ -166,38 +179,43 @@ class Renderer implements RendererInterface
 				$this->logger->error('trace (' . $tmpName . '.log)', [file_get_contents($tmpName . '.log')]);
 			}
 
-			$this->cleanupTempFiles($tmpName);
+			$this->cleanupWorkingDirectory($workDir);
 			throw new \RuntimeException('Invalid formula');
 		}
 
-		$svgContent = SvgHelper::processSvgContent(file_get_contents($tmpName . '.svg'), $formulaObj->useBaseline());
+		try {
+			$rawSvg = file_get_contents($tmpName . '.svg');
+			if ($rawSvg === false) {
+				throw new \RuntimeException('Cannot read the rendered SVG file.');
+			}
+			$svgContent = SvgHelper::processSvgContent($rawSvg, $formulaObj->useBaseline());
+			if (file_put_contents($tmpName . '.svg', $svgContent, LOCK_EX) === false) {
+				throw new \RuntimeException('Cannot sanitize the rendered SVG file.');
+			}
+		} catch (\Throwable $e) {
+			$this->cleanupWorkingDirectory($workDir);
+			throw $e;
+		}
 
-		if ($type === 'png') {
-			if ($this->pngConverter) {
-				// SVG -> PNG
+		try {
+			if ($type === 'png') {
+				if ($this->pngConverter === null) {
+					throw new \RuntimeException('PNG converter is not configured.');
+				}
 				$pngContent = $this->pngConverter->convert($tmpName . '.svg');
-			}
-			if ($this->pngCommand) {
-				// DVI -> PNG
-				Helper::newRelicProfileDataStore(
-					static fn() => exec(sprintf($this->pngCommand, $tmpName)),
-					'shell',
-					Helper::getShortCommandName($this->pngCommand)
-				);
-				$pngContent = file_get_contents($tmpName . '.png');
-			}
-		} elseif ($type === 'jpg' || $type === 'jpeg') {
-			if ($this->jpgConverter) {
-				// SVG -> JPG
+			} elseif ($type === 'jpg' || $type === 'jpeg') {
+				if ($this->jpgConverter === null) {
+					throw new \RuntimeException('JPG converter is not configured.');
+				}
 				$jpgContent = $this->jpgConverter->convert($tmpName . '.svg');
-			} else {
-				$this->cleanupTempFiles($tmpName);
-				throw new \RuntimeException('JPG converter is not configured.');
 			}
+		} catch (\Throwable $e) {
+			$this->cleanupWorkingDirectory($workDir);
+			throw $e;
 		}
 
 		// Cleaning up
-		$this->cleanupTempFiles($tmpName);
+		$this->cleanupWorkingDirectory($workDir);
 
 		if ($type === 'png') {
 			return $pngContent;
@@ -208,11 +226,53 @@ class Renderer implements RendererInterface
 		return $svgContent;
 	}
 
-	private function cleanupTempFiles($tmpName): void
+	private function createWorkingDirectory(): string
 	{
-		foreach (['', '.log', '.aux', '.dvi', '.svg', '.png', '.jpg', '.jpeg'] as $ext) {
-			@unlink($tmpName . $ext);
+		$baseDir = rtrim($this->tmpDir, '/');
+		for ($attempt = 0; $attempt < 10; $attempt++) {
+			$workDir = $baseDir . '/render-' . bin2hex(random_bytes(16));
+			if (@mkdir($workDir, 0700)) {
+				return $workDir;
+			}
 		}
+
+		throw new \RuntimeException('Cannot create a temporary working directory.');
+	}
+
+	private function cleanupWorkingDirectory(string $workDir): void
+	{
+		if (!is_dir($workDir)) {
+			return;
+		}
+
+		$files = new \RecursiveIteratorIterator(
+			new \RecursiveDirectoryIterator($workDir, \FilesystemIterator::SKIP_DOTS),
+			\RecursiveIteratorIterator::CHILD_FIRST
+		);
+		foreach ($files as $file) {
+			$path = $file->getPathname();
+			if ($file->isLink() || $file->isFile()) {
+				@unlink($path);
+			} else {
+				@rmdir($path);
+			}
+		}
+		@rmdir($workDir);
+	}
+
+	private function processEnvironment(string $workDir): array
+	{
+		return [
+			'HOME'         => $workDir,
+			'PATH'         => rtrim($this->texPath, '/') . ':/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+			'TEMP'         => $workDir,
+			'TEXMFOUTPUT'  => $workDir,
+			'TMP'          => $workDir,
+			'TMPDIR'       => $workDir,
+			'openin_any'   => 'p',
+			'openout_any'  => 'p',
+			'shell_escape' => 'f',
+		];
 	}
 
 	/**
@@ -242,7 +302,6 @@ class Renderer implements RendererInterface
 			if (strpos($formula, $disabledCommand) !== false) {
 				if ($this->logger !== null) {
 					$this->logger->error(sprintf('Forbidden command "%s": ', $disabledCommand), [$formula]);
-					$this->logger->error('Server vars: ', $_SERVER);
 				}
 				throw new \RuntimeException('Forbidden commands.');
 			}
@@ -251,7 +310,6 @@ class Renderer implements RendererInterface
 		if (preg_match('#{\\s*filecontents\\s*\\*?\\s*}#', $formula) === 1) {
 			if ($this->logger !== null) {
 				$this->logger->error(sprintf('Forbidden command "%s": ', 'filecontents'), [$formula]);
-				$this->logger->error('Server vars: ', $_SERVER);
 			}
 			throw new \RuntimeException('Forbidden commands.');
 		}

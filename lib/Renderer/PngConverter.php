@@ -9,6 +9,7 @@
 namespace S2\Tex\Renderer;
 
 use S2\Tex\Helper;
+use Symfony\Component\Process\Process;
 
 class PngConverter
 {
@@ -21,15 +22,16 @@ class PngConverter
 
 	public function convert(string $svgFileName): string
 	{
-		$command = sprintf($this->svg2pngCommand, $svgFileName);
+		$command = sprintf($this->svg2pngCommand, escapeshellarg($svgFileName));
 
-		ob_start();
+		$process = Process::fromShellCommandline($command);
+		$process->setTimeout(8);
 		Helper::newRelicProfileDataStore(
-			static fn () => passthru($command),
+			static fn () => $process->mustRun(),
 			'shell',
 			Helper::getShortCommandName($command)
 		);
 
-		return ob_get_clean();
+		return $process->getOutput();
 	}
 }

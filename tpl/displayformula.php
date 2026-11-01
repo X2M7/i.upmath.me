@@ -6,4 +6,4 @@
 {$\displaystyle
 \special{dvisvgm:raw<!--start {?x} {?y} -->}
 <?php echo $formula; ?>
-$
+$}

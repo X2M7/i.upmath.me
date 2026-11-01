@@ -11,9 +11,8 @@ if (!defined('FINGERPRINT')) {
 	define('FINGERPRINT', '');
 }
 
-// 建议：服务地址指向你自己的域名（用于样例图片 URL 和 latex.js）
-$service_url = '//' . ($_SERVER['HTTP_HOST'] ?? 'xumin.net') . '/';
-$script_url  = $service_url . 'latex.js';
+$service_url = '/';
+$script_url  = 'https://i.upmath.me/latex.js';
 
 // 语言：默认中文，支持 ?lang=zh / ?lang=en，并用 cookie 记住
 $supportedLang = ['zh', 'en'];
@@ -97,7 +96,7 @@ foreach ($langLinks as $linkLang => $linkUrl) {
 			<h2><?php echo __('equation editor'); ?></h2>
 			<form name="editor">
 				<p>
-					<textarea class="editor-text" name="source" rows="5" placeholder="<?php echo __('formula in latex'); ?>"><?php echo $editor_content; ?></textarea>
+					<textarea class="editor-text" name="source" rows="5" placeholder="<?php echo __('formula in latex'); ?>"><?php echo htmlspecialchars($editor_content, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></textarea>
 					<br />
 					<label><input type="radio" name="format" id="svg_radio" value="svg" checked />SVG</label>
 					<label><input type="radio" name="format" value="png" />PNG</label>
@@ -176,16 +175,5 @@ foreach ($samples_embedding[$lang] as $hint => $sample) {
 
 	<script src="/latex.js"></script>
 	<script src="/js/scripts.min.js?<?php echo FINGERPRINT; ?>"></script>
-	<script>
-		(function ready(fn) {
-			if (document.readyState != 'loading'){
-				fn();
-			} else {
-				document.addEventListener('DOMContentLoaded', fn);
-			}
-		})(function () {
-			initTexEditor();
-		});
-	</script>
 </body>
 </html>

@@ -69,4 +69,32 @@ class SvgHelperTest extends Unit
 <g id="page1"><!--start 1872.02 1483.22 --><!--bbox 0 0 0 0 --></g>
 </svg>', SvgHelper::processSvgContent($emptySvg, true));
     }
+
+	public function testRemovesActiveContentFromRenderedSvg(): void
+	{
+		$svg = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 10 10">'
+			. '<!--start 0 5 -->'
+			. '<script>alert(1)</script>'
+			. '<foreignObject><iframe srcdoc="&lt;script&gt;alert(1)&lt;/script&gt;"/></foreignObject>'
+			. '<use xlink:href="#safe" onload="alert(1)"/>'
+			. '<a href="java&#9;script:alert(1)"><text>bad</text></a>'
+			. '</svg>';
+
+		$result = SvgHelper::processSvgContent($svg, true);
+
+		$this->assertSame(1, substr_count($result, '<script'));
+		$this->assertStringNotContainsString('foreignObject', $result);
+		$this->assertStringNotContainsString('iframe', $result);
+		$this->assertStringNotContainsString('onload', $result);
+		$this->assertStringNotContainsString('javascript:', strtolower($result));
+		$this->assertStringContainsString('xlink:href="#safe"', $result);
+	}
+
+	public function testRejectsSvgDoctype(): void
+	{
+		$this->expectException(\RuntimeException::class);
+		$this->expectExceptionMessage('forbidden declaration');
+
+		SvgHelper::processSvgContent('<!DOCTYPE svg [<!ENTITY x "x">]><svg xmlns="http://www.w3.org/2000/svg">&x;</svg>', true);
+	}
 }

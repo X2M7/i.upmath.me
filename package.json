@@ -4,21 +4,17 @@
   "private": true,
   "version": "0.1.0",
   "dependencies": {
-    "svgo": "^3.2.0"
+    "svgo": "^3.3.5"
+  },
+  "resolutions": {
+    "source-map-js": "^1.2.2"
   },
   "devDependencies": {
     "autosize": "^6.0.1",
-    "grunt": "^1.0.4",
-    "grunt-contrib-concat": "^2.1.0",
-    "grunt-contrib-cssmin": "^5.0.0",
-    "grunt-contrib-uglify": "^5.2.1",
-    "grunt-contrib-watch": "^1.1.0",
-    "grunt-fingerprint": "~0.2.0",
-    "grunt-shell": "~4.0.0",
-    "grunt-text-replace": "~0.4.0"
+    "esbuild": "^0.28.2"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "node scripts/build.js"
   },
   "author": "Roman Parpalak",
   "license": "MIT"

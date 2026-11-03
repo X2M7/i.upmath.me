@@ -16,7 +16,7 @@ use S2\Tex\Processor\Request;
 
 $delayedProcessor = new DelayedProcessor(
     new CacheProvider(CACHE_SUCCESS_DIR, CACHE_FAIL_DIR),
-    'http://localhost:' . (defined('HTTP_SVGO_PORT') ? HTTP_SVGO_PORT : '8800') . '/'
+    'http://127.0.0.1:' . (defined('HTTP_SVGO_PORT') ? HTTP_SVGO_PORT : '8800') . '/'
 );
 
 $formula = $_POST['formula'] ?? '';

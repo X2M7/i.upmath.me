@@ -65,10 +65,10 @@ class DelayedProcessor
 			$optimizedSvg = $unoptimizedSvg;
 		} else {
 			$context = stream_context_create(['http' => [
-				'method'        => 'POST',
-				'header'        => "Content-Type: image/svg+xml\r\n",
-				'content'       => $unoptimizedSvg,
-				'timeout'       => 5,
+				'method'  => 'POST',
+				'header'  => "Content-Type: image/svg+xml\r\n",
+				'content' => $unoptimizedSvg,
+				'timeout' => 5,
 			]]);
 
 			$optimizedSvg = Helper::newRelicProfileDataStore(

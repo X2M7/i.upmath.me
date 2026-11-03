@@ -16,7 +16,8 @@ if (!defined('TEX_HOST')) {
 }
 
 $service_url = '/';
-$script_url  = 'https://' . TEX_HOST . '/latex.js';
+$script_path = '/latex.js' . (FINGERPRINT === '' ? '' : '?' . rawurlencode(FINGERPRINT));
+$script_url  = 'https://' . TEX_HOST . $script_path;
 
 // 语言：默认中文，支持 ?lang=zh / ?lang=en，并用 cookie 记住
 $supportedLang = ['zh', 'en'];
@@ -177,7 +178,7 @@ foreach ($samples_embedding[$lang] as $hint => $sample) {
 		</div>
 	</div>
 
-	<script src="/latex.js"></script>
+	<script src="<?php echo htmlspecialchars($script_path, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>"></script>
 	<script src="/js/scripts.min.js?<?php echo FINGERPRINT; ?>"></script>
 </body>
 </html>

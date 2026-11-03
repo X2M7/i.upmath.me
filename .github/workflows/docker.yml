@@ -78,6 +78,16 @@ jobs:
           fi
 
           curl --fail --silent --show-error \
+            http://127.0.0.1:8080/ \
+            --output /tmp/upmath-index.html
+          grep --perl-regexp --quiet '/latex\.js\?[0-9a-f]{16}' /tmp/upmath-index.html
+
+          curl --fail --silent --show-error --head \
+            http://127.0.0.1:8080/latex.js \
+            --output /tmp/upmath-latex.headers
+          grep --ignore-case --quiet '^cache-control: max-age=300' /tmp/upmath-latex.headers
+
+          curl --fail --silent --show-error \
             http://127.0.0.1:8080/svg/x%5E2 \
             --output /tmp/upmath-smoke.svg
           grep --quiet '<svg' /tmp/upmath-smoke.svg

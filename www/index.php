@@ -11,8 +11,12 @@ if (!defined('FINGERPRINT')) {
 	define('FINGERPRINT', '');
 }
 
+if (!defined('TEX_HOST')) {
+	define('TEX_HOST', 'tex.xumin.net');
+}
+
 $service_url = '/';
-$script_url  = 'https://i.upmath.me/latex.js';
+$script_url  = 'https://' . TEX_HOST . '/latex.js';
 
 // 语言：默认中文，支持 ?lang=zh / ?lang=en，并用 cookie 记住
 $supportedLang = ['zh', 'en'];
@@ -144,7 +148,7 @@ foreach ($samples as $hint => $sample) {
 		<div class="section-content text-content">
 			<?php echo __('embedding section 1'); ?>
 
-			<pre class="script-code"><code>&lt;script src=&quot;<a href="<?php echo $script_url; ?>"><?php echo $script_url; ?></a>&quot;&gt;&lt;/script&gt;</code></pre>
+			<pre class="script-code"><code>&lt;script src=&quot;<a href="<?php echo htmlspecialchars($script_url, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>"><?php echo htmlspecialchars($script_url, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></a>&quot;&gt;&lt;/script&gt;</code></pre>
 
 <?php
 foreach ($samples_embedding[$lang] as $hint => $sample) {

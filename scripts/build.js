@@ -44,9 +44,7 @@ async function main() {
 	});
 
 	const source = await fs.readFile(path.join(root, 'src/latex.js'), 'utf8');
-	const directoryName = path.basename(root);
-	const host = directoryName === 'tex.s2cms.ru' ? 'i.upmath.me' : directoryName;
-	await fs.writeFile(publicScriptOutput, source.replaceAll('i.upmath.me', host));
+	await fs.writeFile(publicScriptOutput, source);
 
 	await Promise.all([
 		writeGzip(editorOutput),

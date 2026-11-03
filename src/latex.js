@@ -4,8 +4,15 @@
  */
 
 (function (w, d) {
+	var scriptElement = d.currentScript,
+		scriptLink = d.createElement('a');
+
+	scriptLink.href = scriptElement && scriptElement.src
+		? scriptElement.src
+		: 'https://tex.xumin.net/latex.js';
+
 	var prtcl = location.protocol,
-		ntwPath = '//i.upmath.me',
+		ntwPath = scriptLink.host ? '//' + scriptLink.host : '//tex.xumin.net',
 		url = (prtcl === 'http:' || prtcl === 'https:') ? ntwPath : 'http:' + ntwPath,
 		im = d.implementation,
 		ext = im && im.hasFeature("http://www.w3.org/TR/SVG11/feature#BasicStructure", "1.1") ? 'svg' : 'png';
@@ -104,6 +111,9 @@
 
 			fetch(path)
 				.then(function (resp) {
+					if (!resp.ok) {
+						throw new Error('Formula request failed');
+					}
 					return resp.text();
 				})
 				.then(function (text) {
@@ -112,13 +122,28 @@
 					if (m && m[1]) {
 						s = m[1].split('|');
 						setSizes(path, s.shift(), s.shift(), s.shift());
+					} else {
+						revealImages(path);
 					}
+				})
+				.catch(function () {
+					revealImages(path);
 				});
 		}
 		if (!aSizes[path]) {
 			imgQueue[path][isCentered].push(eImg);
 		} else {
 			setImgSize(eImg, isCentered, aSizes[path][0], aSizes[path][1], aSizes[path][2]);
+		}
+	}
+
+	function revealImages(path) {
+		for (var isCentered = 0; isCentered < 2; isCentered++) {
+			var images = imgQueue[path][isCentered], i = images.length;
+
+			for (; i--;) {
+				images[i].style.opacity = '1';
+			}
 		}
 	}
 

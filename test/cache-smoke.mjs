@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { deflateRawSync } from 'node:zlib';
@@ -6,11 +7,20 @@ import { deflateRawSync } from 'node:zlib';
 const base = new URL(process.argv[2] ?? 'http://127.0.0.1:8080');
 assert(['127.0.0.1', 'localhost', '[::1]'].includes(base.hostname), 'Run against a local test container, not a public CDN');
 const cacheControl = 'public, max-age=86400, s-maxage=15552000';
+const strictCsp = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox";
+const embeddedCsp = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; sandbox allow-scripts";
 const compressed = (formula, extension = 'svg') => `/${extension}b/${deflateRawSync(formula).toString('base64url')}`;
 
 async function request(path, options = {}) {
   const response = await fetch(new URL(path, base), { signal: AbortSignal.timeout(45000), ...options });
   const body = Buffer.from(await response.arrayBuffer());
+  if (/^\/(?:svg|png|jpg|jpeg)b?\//.test(path)) {
+    const destination = new Headers(options.headers).get('Sec-Fetch-Dest');
+    const expectedCsp = ['object', 'embed', 'iframe'].includes(destination) ? embeddedCsp : strictCsp;
+    assert.equal(response.headers.get('content-security-policy'), expectedCsp, `CSP for ${path} (${destination})`);
+    assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+    assert(response.headers.get('vary')?.toLowerCase().split(/\s*,\s*/).includes('sec-fetch-dest'), 'Vary must distinguish CSP variants');
+  }
   return { status: response.status, headers: response.headers, body };
 }
 
@@ -67,6 +77,30 @@ const notModified = await request(path, { headers: { 'If-Modified-Since': cached
 assert.equal(notModified.status, 304);
 assert.equal(notModified.headers.get('cache-control'), cacheControl);
 
+// Exercise static/raw, X-Accel-Redirect, and cold-render paths, not just one location.
+for (const destination of ['document', 'image', 'empty', 'object', 'embed', 'iframe', 'object-extra']) {
+  for (const variantPath of [path, `/svg/${encodeURIComponent(formula)}`]) {
+    const headers = { 'Sec-Fetch-Dest': destination, 'Accept-Encoding': 'gzip' };
+    const variant = await request(variantPath, { headers });
+    checkSvg(variant);
+    assert.deepEqual(variant.body, cached.body);
+    assert.match(variant.headers.get('vary'), /accept-encoding/i);
+    assert.equal((await request(variantPath, { method: 'HEAD', headers })).status, 200);
+    const conditional = await request(variantPath, {
+      headers: { ...headers, 'If-Modified-Since': variant.headers.get('last-modified') },
+    });
+    assert.equal(conditional.status, 304);
+    assert.equal(conditional.headers.get('cache-control'), cacheControl);
+  }
+  assert.equal((await request('/svgb/invalid!', { headers: { 'Sec-Fetch-Dest': destination } })).status, 400);
+}
+for (const destination of ['document', 'object']) {
+  for (const encode of [compressed, value => `/svg/${encodeURIComponent(value)}`]) {
+    checkSvg(await request(encode(`${formula}+${Date.now()}`), { headers: { 'Sec-Fetch-Dest': destination } }));
+  }
+}
+console.log('PASS SVG CSP and Vary on raw/compressed, cached/cold, HEAD/304/error responses');
+
 for (const extension of ['png', 'jpg']) {
   const result = await request(compressed(formula, extension));
   assert.equal(result.status, 200);
@@ -81,7 +115,15 @@ for (const badPath of ['/svgb/invalid!', compressed('x'.repeat(100001)), compres
   assert.equal(result.headers.get('cache-control'), 'no-store');
   assert.doesNotMatch(result.body.toString(), /Warning:|Fatal error:/);
 }
-for (const privatePath of ['/_cache/00/00/test.svg', '/_error/test.svg', '/resolve.php', '/render.php']) {
+const fixturePath = formula => {
+  const hash = createHash('md5').update(`${formula}\nsvg\n\ncache-v2`).digest('hex');
+  return `${hash.slice(0, 2)}/${hash.slice(2, 4)}/${hash.slice(4)}.svg`;
+};
+for (const privatePath of [
+  `/_cache/${fixturePath('cache-smoke-legacy-gzip')}.gz`,
+  `/_error/${fixturePath('cache-smoke-invalid')}`,
+  '/_cache/00/00/test.svg', '/_error/test.svg', '/resolve.php', '/render.php',
+]) {
   assert.equal((await request(privatePath)).status, 404, privatePath);
 }
 assert.equal((await request(path, { method: 'OPTIONS' })).status, 204);

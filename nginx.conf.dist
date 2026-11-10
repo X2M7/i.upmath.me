@@ -6,6 +6,13 @@ upstream php-tex-sock {
 	server unix:/var/run/php-fpm-tex.sock;
 }
 
+# Directly opened SVGs must not run scripts. Legacy embeds need postMessage,
+# but retain a sandbox instead of dropping CSP entirely.
+map $http_sec_fetch_dest $svg_csp {
+	~^(object|embed|iframe)$ "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; sandbox allow-scripts";
+	default "default-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox";
+}
+
 server {
 	listen 80;
     listen [::]:80;
@@ -26,6 +33,9 @@ server {
 
 		add_header 'Access-Control-Allow-Origin' '*' always;
 		add_header 'Access-Control-Allow-Methods' 'GET, OPTIONS' always;
+		add_header Content-Security-Policy $svg_csp always;
+		add_header X-Content-Type-Options nosniff always;
+		add_header Vary "Sec-Fetch-Dest" always;
 
 		#expires 1d; # enabled on prod
 
@@ -109,6 +119,14 @@ server {
 		index           index.html index.php;
 	}
 
+	location ^~ /_cache/ {
+		internal;
+	}
+
+	location ^~ /_error/ {
+		internal;
+	}
+
 	location /g/ {
 		try_files       $uri $uri/ /index.php;
 	}
@@ -126,6 +144,9 @@ server {
 	location @s2_latex_renderer {
         add_header 'Access-Control-Allow-Origin' '*' always;
         add_header 'Access-Control-Allow-Methods' 'GET, OPTIONS' always;
+        add_header Content-Security-Policy $svg_csp always;
+        add_header X-Content-Type-Options nosniff always;
+        add_header Vary "Sec-Fetch-Dest" always;
 
 		include	        /etc/nginx/fastcgi.conf;
 		fastcgi_pass    php-tex-sock;

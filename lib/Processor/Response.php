@@ -73,6 +73,7 @@ class Response
 		}
 
 		header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $this->modifiedAt) . ' GMT');
+		header('Cache-Control: public, max-age=86400, s-maxage=15552000');
 		header('Content-Length: ' . strlen($this->content));
 
 		echo $this->content;

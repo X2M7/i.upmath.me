@@ -42,10 +42,15 @@ class Processor
 
 		if ($cacheState->cacheExists()) {
 			// Cached SVG or PNG.
-			$modifiedAt = filemtime($cacheState->getCacheName());
-			$content    = file_get_contents($cacheState->getCacheName());
+			$modifiedAt = @filemtime($cacheState->getCacheName());
+			$content    = @file_get_contents($cacheState->getCacheName());
+			if ($content !== false && str_ends_with($cacheState->getCacheName(), '.gz')) {
+				$content = @gzdecode($content);
+			}
 
-			return new CachedResponse($request, $content, $modifiedAt);
+			if ($content !== false && $modifiedAt !== false) {
+				return new CachedResponse($request, $content, $modifiedAt);
+			}
 		}
 
 		if ($request->isPng()) {

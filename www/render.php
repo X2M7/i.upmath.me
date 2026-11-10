@@ -37,6 +37,7 @@ define('SVG2JPG_COMMAND', '/usr/bin/rsvg-convert %1$s -d 288 -p 288 -b white -f 
 function error400($error = 'Invalid formula')
 {
     header($_SERVER['SERVER_PROTOCOL'] . ' 400 Bad Request');
+    header('Cache-Control: no-store');
     include '400.php';
 }
 

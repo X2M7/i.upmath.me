@@ -96,6 +96,9 @@ jobs:
             'http://127.0.0.1:8080/svg/%5Cinput%7B%2Fetc%2Fpasswd%7D')
           test "$blocked_status" = 400
 
+          docker exec --user www-data "$container" php test/cache-fixture.php
+          docker exec "$container" node test/cache-smoke.mjs http://127.0.0.1
+
       - name: Build and push Docker image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:

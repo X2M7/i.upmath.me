@@ -23,6 +23,9 @@ class CacheProvider
     public function getCacheState(Request $request): CacheState
     {
         $cacheName = $this->cachePathFromRequest($request, false);
+        if ($request->isSvg() && !is_file($cacheName) && is_file($cacheName . '.gz')) {
+            $cacheName .= '.gz';
+        }
         return new CacheState($cacheName, file_exists($cacheName));
     }
 

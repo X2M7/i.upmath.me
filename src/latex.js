@@ -17,56 +17,6 @@
 		im = d.implementation,
 		ext = im && im.hasFeature("http://www.w3.org/TR/SVG11/feature#BasicStructure", "1.1") ? 'svg' : 'png';
 
-	(function (fn) {
-		var done = !1,
-			top = !0,
-			root = d.documentElement,
-			w3 = !!d.addEventListener,
-
-			add = w3 ? 'addEventListener' : 'attachEvent',
-			rem = w3 ? 'removeEventListener' : 'detachEvent',
-			pre = w3 ? '' : 'on',
-
-			init = function (e) {
-				if (e.type === 'readystatechange' && d.readyState !== 'complete') {
-					return;
-				}
-				(e.type === 'load' ? w : d)[rem](pre + e.type, init, false);
-				if (!done && (done = !0)) {
-					fn.call(w, e.type || e);
-				}
-			},
-
-			poll = function () {
-				try {
-					root.doScroll('left');
-				} catch (e) {
-					setTimeout(poll, 50);
-					return;
-				}
-				init('poll');
-			};
-
-		if (d.readyState === 'complete') {
-			fn.call(w, 'lazy');
-		} else {
-			if (d.createEventObject && root.doScroll) {
-				try {
-					top = !w.frameElement;
-				} catch (e) {
-				}
-				if (top) {
-					poll();
-				}
-			}
-			d[add](pre + 'DOMContentLoaded', init, !1);
-			d[add](pre + 'readystatechange', init, !1);
-			w[add](pre + 'load', init, !1);
-		}
-	})(function () {
-		processTree(d.body);
-	});
-
 	var imgQueue = {}, aSizes = {};
 
 	function deflateRaw(text, callback) {
@@ -255,4 +205,56 @@
 	};
 
 	w.S2Latex = {processTree: processTree};
+
+	// A script loaded after the document is complete runs this callback immediately.
+	// Initialize the renderer and image queues before registering it.
+	(function (fn) {
+		var done = !1,
+			top = !0,
+			root = d.documentElement,
+			w3 = !!d.addEventListener,
+
+			add = w3 ? 'addEventListener' : 'attachEvent',
+			rem = w3 ? 'removeEventListener' : 'detachEvent',
+			pre = w3 ? '' : 'on',
+
+			init = function (e) {
+				if (e.type === 'readystatechange' && d.readyState !== 'complete') {
+					return;
+				}
+				(e.type === 'load' ? w : d)[rem](pre + e.type, init, false);
+				if (!done && (done = !0)) {
+					fn.call(w, e.type || e);
+				}
+			},
+
+			poll = function () {
+				try {
+					root.doScroll('left');
+				} catch (e) {
+					setTimeout(poll, 50);
+					return;
+				}
+				init('poll');
+			};
+
+		if (d.readyState === 'complete') {
+			fn.call(w, 'lazy');
+		} else {
+			if (d.createEventObject && root.doScroll) {
+				try {
+					top = !w.frameElement;
+				} catch (e) {
+				}
+				if (top) {
+					poll();
+				}
+			}
+			d[add](pre + 'DOMContentLoaded', init, !1);
+			d[add](pre + 'readystatechange', init, !1);
+			w[add](pre + 'load', init, !1);
+		}
+	})(function () {
+		processTree(d.body);
+	});
 })(window, document);

@@ -37,6 +37,57 @@ docker stop upmath
 docker rm upmath
 ```
 
+### Formula caching
+
+Successful formula images use `Cache-Control: public, max-age=86400, s-maxage=15552000`
+(one day in browsers, 180 days in shared caches). Formula errors and overload
+responses use `no-store`. In EdgeOne, match the renderer host and URL prefixes
+such as `/svg/*` and `/svgb/*`, not just a `.svg` suffix. Preserve the `c` and
+`color` query parameters in the cache key, and do not override error responses
+with a long status-code cache TTL.
+
+Compressed formula URLs are resolved in the lightweight PHP pool. Nginx serves
+cached images, including existing gzip-only SVGs, without entering the TeX
+render queue. Only cache misses use the bounded queue and the two TeX workers.
+
+Both Nginx templates include the SVG protections from upstream `ff8fea4`.
+Direct navigation, image requests, and requests without `Sec-Fetch-Dest` receive
+a CSP that blocks scripts. Legacy `object`, `embed`, and `iframe` requests retain
+the inline baseline `postMessage` script, confined by `sandbox allow-scripts`
+without `allow-same-origin`. Cache directories cannot be accessed externally.
+
+Image responses include `Vary: Sec-Fetch-Dest` because their CSP differs by
+embedding context. **Before deploying these templates behind EdgeOne, enable
+the Vary feature for the renderer host** and ensure `Sec-Fetch-Dest` reaches the
+origin. See [EdgeOne's Vary documentation](https://intl.cloud.tencent.com/zh/document/product/1145/54451).
+An equivalent CDN configuration must vary its cache key on that request header,
+including its absence; do not strip the existing `Accept-Encoding` variation.
+After deployment, refresh the affected formula URLs so cached old response
+headers do not remain active for the 180-day TTL. Verify direct-navigation and
+embedded responses through the CDN as well as against the origin.
+
+Keep generated images across container replacements with named volumes:
+
+```bash
+docker run -d --name upmath --restart unless-stopped \
+  -p 127.0.0.1:8080:80 \
+  --mount type=volume,src=upmath-cache,dst=/var/www/i.upmath.me/www/_cache \
+  --mount type=volume,src=upmath-error-cache,dst=/var/www/i.upmath.me/www/_error \
+  ghcr.io/x2m7/i.upmath.me:latest
+```
+
+Before replacing an existing container without these mounts, back up and migrate
+its cache directories. Keep the previous container/image until the replacement
+passes checks. Do not clear the entire CDN cache as part of a routine deployment.
+
+The Docker workflow runs cache regressions before publishing. To repeat them in
+an isolated test container (the fixtures modify its cache):
+
+```bash
+docker exec --user www-data upmath-test php test/cache-fixture.php
+docker exec upmath-test node test/cache-smoke.mjs http://127.0.0.1
+```
+
 ### Build locally (optional)
 
 ```bash

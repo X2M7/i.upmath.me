@@ -14,7 +14,8 @@
     "esbuild": "^0.28.2"
   },
   "scripts": {
-    "build": "node scripts/build.js"
+    "build": "node scripts/build.js",
+    "test": "node --test test/latex-smoke.mjs"
   },
   "author": "Roman Parpalak",
   "license": "MIT"

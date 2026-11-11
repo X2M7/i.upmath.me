@@ -31,6 +31,7 @@ jobs:
       - run: yarn install --frozen-lockfile --non-interactive
       - run: yarn audit
       - run: yarn build
+      - run: yarn test
 
   unit:
     runs-on: ubuntu-latest
